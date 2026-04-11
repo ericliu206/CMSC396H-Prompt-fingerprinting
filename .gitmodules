@@ -1,0 +1,3 @@
+[submodule "prompt_obfuscation"]
+	path = prompt_obfuscation
+	url = https://github.com/Dormant-Neurons/prompt_obfuscation.git

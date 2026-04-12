@@ -1,3 +1,4 @@
 [submodule "prompt_obfuscation"]
 	path = prompt_obfuscation
 	url = https://github.com/ericliu206/prompt_obfuscation.git
+	branch = main

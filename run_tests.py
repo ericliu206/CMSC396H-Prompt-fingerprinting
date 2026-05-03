@@ -109,7 +109,6 @@ class ModelWrapper:
         system_prompt: str,
         user_input: str,
         max_new_tokens: int = 100,
-        temperature: float = 0.7,
         top_p: float = 0.95,
     ) -> str:
         """Generate response given system prompt and user input."""
@@ -146,9 +145,8 @@ class ModelWrapper:
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                temperature=temperature,
                 top_p=top_p,
-                do_sample=True,
+                do_sample=False,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
             )
@@ -193,7 +191,6 @@ def main(
     pape_dir: str = "results/Pape",
     model_name: str = "Qwen/Qwen3.5-0.8B",
     max_new_tokens: int = 100,
-    temperature: float = 0.7,
     top_p: float = 0.95,
 ):
     """Main function to run inference with candidates."""
@@ -279,7 +276,6 @@ def main(
                     system_prompt=obfuscated_system_prompt,
                     user_input=user_input,
                     max_new_tokens=max_new_tokens,
-                    temperature=temperature,
                     top_p=top_p,
                 )
                 logger.info(f"Generated obfuscated response: {obfuscated_response[:50]}...")
@@ -293,7 +289,6 @@ def main(
                     system_prompt=conventional_system_prompt,
                     user_input=user_input,
                     max_new_tokens=max_new_tokens,
-                    temperature=temperature,
                     top_p=top_p,
                 )
                 logger.info(f"Generated conventional response: {conventional_response[:50]}...")
@@ -346,12 +341,6 @@ if __name__ == "__main__":
         help="Maximum tokens to generate"
     )
     parser.add_argument(
-        "--temperature",
-        type=float,
-        default=1.0,
-        help="Temperature for generation"
-    )
-    parser.add_argument(
         "--top-p",
         type=float,
         default=0.95,
@@ -364,6 +353,5 @@ if __name__ == "__main__":
         pape_dir=args.pape_dir,
         model_name=args.model,
         max_new_tokens=args.max_tokens,
-        temperature=args.temperature,
         top_p=args.top_p,
     )

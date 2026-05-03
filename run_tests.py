@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-"""
-Script that loads system prompts from best_candidate.pt files and generates responses
-using those prompts with user inputs derived from CSV column titles.
-"""
 
 import argparse
-import csv
 import json
 import logging
 import sys
@@ -13,6 +8,8 @@ from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+from input_loaders import HuiInputLoader
 
 # Configure logging
 logging.basicConfig(
@@ -192,23 +189,7 @@ def load_conventional_system_prompt_from_params(params_file: Path) -> str:
         raise
 
 
-def get_csv_column_title(csv_file: Path, column_index: int = 1) -> str:
-    """Extract the title of a specific column from CSV file."""
-    try:
-        with open(csv_file, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            headers = next(reader)
-            if column_index < len(headers):
-                return headers[column_index]
-            else:
-                raise IndexError(f"Column index {column_index} not found in CSV")
-    except Exception as e:
-        logger.error(f"Failed to read CSV column title from {csv_file}: {e}")
-        raise
-
-
 def main(
-    hui_dir: str = "results/Hui",
     pape_dir: str = "results/Pape",
     model_name: str = "Qwen/Qwen3.5-0.8B",
     max_new_tokens: int = 100,
@@ -216,13 +197,8 @@ def main(
     top_p: float = 0.95,
 ):
     """Main function to run inference with candidates."""
-    
-    hui_path = Path(hui_dir)
+
     pape_path = Path(pape_dir)
-    
-    if not hui_path.exists():
-        logger.error(f"Hui directory not found: {hui_path}")
-        sys.exit(1)
     
     if not pape_path.exists():
         logger.error(f"Pape directory not found: {pape_path}")
@@ -231,13 +207,22 @@ def main(
     # Initialize model
     model_wrapper = ModelWrapper(model_name=model_name, quantization_mode="4bit")
     
-    # Get all CSV files from Hui directory
-    csv_files = list(hui_path.glob("*.csv"))
-    if not csv_files:
-        logger.error(f"No CSV files found in {hui_path}")
-        sys.exit(1)
-    
-    logger.info(f"Found {len(csv_files)} CSV files in {hui_path}")
+    input_loaders = [HuiInputLoader()]
+
+    inputs = []
+    for loader in input_loaders:
+        try:
+            new_inputs = loader.load_inputs()
+        except Exception as e:
+            logger.error(f"Failed to load inputs from {loader.source_dir} directory: {e}")
+            sys.exit(1)
+
+        if not new_inputs:
+            logger.error(f"No inputs available from {loader.source_dir}")
+            sys.exit(1)
+
+        logger.info(f"Found {len(new_inputs)} input files in {loader.source_dir}")
+        inputs.extend(new_inputs)
     
     # Get all candidate directories from Pape directory
     pape_dirs = [d for d in pape_path.iterdir() if d.is_dir()]
@@ -247,15 +232,11 @@ def main(
     
     logger.info(f"Found {len(pape_dirs)} candidate directories in {pape_path}")
     
-    # Process each CSV file
-    for csv_file in csv_files:
-        logger.info(f"Processing CSV: {csv_file.name}")
+    # Process each input
+    for path, user_input in inputs:
+        logger.info(f"Processing {path.name}")
         
-        # Get the title of the second column
-        user_input = get_csv_column_title(csv_file, column_index=1)
-        logger.info(f"Using user input (column title): {user_input[:50]}...")
-        
-        csv_results = {}
+        results = {}
         
         # Process each Pape candidate directory
         for pape_candidate_dir in pape_dirs:
@@ -319,7 +300,7 @@ def main(
             except Exception as e:
                 logger.error(f"Failed to generate conventional response: {e}")
             
-            csv_results[pape_candidate_dir.name] = {
+            results[pape_candidate_dir.name] = {
                 "user_input": user_input,
                 "conventional_system_prompt": conventional_system_prompt,
                 "conventional_response": conventional_response,
@@ -327,15 +308,13 @@ def main(
                 "obfuscated_response": obfuscated_response,
             }
         
-        # Save results next to the CSV file
-        csv_stem = csv_file.stem
-        output_filename = f"{csv_stem}_test_results.json"
-        output_path = csv_file.parent / output_filename
+        output_filename = f"{path.stem}_test_results.json"
+        output_path = path.parent / output_filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(csv_results, f, indent=2)
+            json.dump(results, f, indent=2)
         
-        logger.info(f"Results for {csv_file.name} saved to {output_path}")
+        logger.info(f"Results for {path.name} saved to {output_path}")
 
 
 if __name__ == "__main__":
@@ -382,7 +361,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     main(
-        hui_dir=args.hui_dir,
         pape_dir=args.pape_dir,
         model_name=args.model,
         max_new_tokens=args.max_tokens,
